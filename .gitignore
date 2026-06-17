@@ -1,0 +1,5 @@
+# IGNORE ALL FILES IN LIBRARY FOLDER INCLUDING NEW FOLDER
+Library/
+Library/**
+Logs
+UserSettings
