@@ -1,0 +1,47 @@
+# =========================================================================
+# Unity Generated Folders & Files
+# =========================================================================
+/[Ll]ogs/
+/[Pp]ackages/
+/[Vv]ersion/
+/[Vv]REntryPoint/
+/[Ur]pdate/
+/[Bb]uild/
+/[Bb]uilds/
+/[Mm]emoryCaptures/
+/[Al]lwaysIncludedShaders/
+/UserSettings/
+/Library/
+/Obj/
+
+# =========================================================================
+# Asset Store Packages & Generated Assets
+# =========================================================================
+/[As]sets/AssetStoreTools*
+
+# =========================================================================
+# IDE and Project Solution Files (The ones causing branch-switch errors)
+# =========================================================================
+*.csproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svclog
+*.com.unity.ide.vscode/
+
+# IDE specific folders
+.vs/
+.idea/
+.gradle/
+.vscode/
+
+# =========================================================================
+# OS Generated Files
+# =========================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
