@@ -1,6 +1,10 @@
-# IGNORE ALL FILES IN LIBRARY FOLDER INCLUDING NEW FOLDER
-Library/
-Library/**
-Logs
-UserSettings
-Temp
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Mm]emoryCaptures/
+.vs/
+*.csproj
+*.sln
+*.slnx
