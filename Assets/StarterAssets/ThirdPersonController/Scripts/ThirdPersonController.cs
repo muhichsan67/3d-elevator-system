@@ -81,6 +81,9 @@ namespace StarterAssets
         private const float _threshold = 0.01f;
         private bool _hasAnimator;
 
+        [Tooltip("Sensitivitas pergerakan kamera menggunakan mouse")]
+        public float mouseSensitivity = 2.0f;
+
         private bool IsCurrentDeviceMouse
         {
             get
@@ -175,8 +178,11 @@ namespace StarterAssets
             {
                 float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
 
-                _cinemachineTargetYaw += _input.look.x * deltaTimeMultiplier;
-                _cinemachineTargetPitch += _input.look.y * deltaTimeMultiplier;
+                // _cinemachineTargetYaw += _input.look.x * deltaTimeMultiplier * mouseSensitivity;
+                // _cinemachineTargetPitch += _input.look.y * deltaTimeMultiplier * mouseSensitivity;
+                // Hapus 'deltaTimeMultiplier' agar input mouse bersifat mentah dan instan
+                _cinemachineTargetYaw += _input.look.x * mouseSensitivity;
+                _cinemachineTargetPitch += _input.look.y * mouseSensitivity;
             }
 
             _cinemachineTargetYaw = ClampAngle(_cinemachineTargetYaw, float.MinValue, float.MaxValue);

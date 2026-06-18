@@ -47,9 +47,11 @@ namespace ElevatorSystem
         /// Memvalidasi dan memulai proses perpindahan lantai elevator.
         public bool MoveToFloor(int targetFloorIndex)
         {
-            // Validasi jika elevator sedang mengunci, sedang bergerak, atau memilih lantai yang sama
-            if (isLocked || isMoving || targetFloorIndex == currentFloor)
+            // [PERBAIKAN] Tambahkan validasi targetFloorIndex == 3 (Index untuk lantai F3)
+            // Jadi sistem akan langsung MENOLAK jika pemain mencoba mendatangi lantai F3
+            if (isLocked || isMoving || targetFloorIndex == currentFloor || targetFloorIndex == 3)
             {
+                Debug.LogWarning($"ElevatorManager: Akses ke lantai index {targetFloorIndex} ditolak (Lantai F3 Terkunci/Disabled)!");
                 return false; 
             }
 
@@ -75,9 +77,26 @@ namespace ElevatorSystem
             // Eksekusi pemindahan posisi Player jika komponen terpasang
             if (playerTransform != null)
             {
+                // [PERBAIKAN] Ambil komponen CharacterController dari Player
+                CharacterController cc = playerTransform.GetComponent<CharacterController>();
+                
+                // [PERBAIKAN] Matikan sementara agar tidak bentrok dengan perpindahan posisi instan
+                if (cc != null)
+                {
+                    cc.enabled = false;
+                }
+
+                // Pindahkan koordinat posisi dan rotasi
                 playerTransform.position = floorSpawnPoints[targetFloorIndex].position;
                 playerTransform.rotation = floorSpawnPoints[targetFloorIndex].rotation;
-                Debug.Log($"Player berhasil dipindahkan ke lantai index: {targetFloorIndex}");
+
+                // [PERBAIKAN] Hidupkan kembali setelah Player resmi berada di posisi lantai baru
+                if (cc != null)
+                {
+                    cc.enabled = true;
+                }
+
+                Debug.Log($"Player berhasil dipindahkan ke lantai index: {targetFloorIndex} (CharacterController diamankan).");
             }
             else
             {
