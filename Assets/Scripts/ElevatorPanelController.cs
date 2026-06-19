@@ -5,11 +5,7 @@ using TMPro;
 
 namespace ElevatorSystem
 {
-    /// Mengatur seluruh interaksi panel UI Elevator (World Space Canvas):
-    /// - Menerima klik tombol lantai (B1, F1, F2, F3)
-    /// - Mengisi Progress Bar (Image.fillAmount 0 -> 1) via Coroutine
-    /// - Memperbarui Status Text ("Idle", "Moving...", "Access Denied", "Arrived")
-    /// - Berkomunikasi dengan ElevatorManager (Singleton) milik Orang 1
+    /// Mengatur seluruh interaksi panel UI Elevator (World Space Canvas) dengan Audio Integration
     public class ElevatorPanelController : MonoBehaviour
     {
         [Header("Floor Buttons (urutan: B1=0, F1=1, F2=2, F3=3)")]
@@ -41,15 +37,30 @@ namespace ElevatorSystem
         [Header("Floor Labels (untuk Status Text)")]
         [SerializeField] private string[] floorLabels = new string[] { "B1", "F1", "F2", "F3" };
 
-        // Cache komponen Image dari masing-masing tombol untuk efek warna
-        private Image[] floorButtonImages;
+        [Header("Audio Settings")]
+        [Tooltip("Drag AudioSource yang menempel pada object panel ini.")]
+        [SerializeField] private AudioSource audioSource;
+        
+        [Tooltip("Suara saat tombol lantai berhasil ditekan.")]
+        [SerializeField] private AudioClip buttonClickClip;
+        
+        [Tooltip("Suara error saat akses lantai ditolak.")]
+        [SerializeField] private AudioClip accessDeniedClip;
+        
+        [Tooltip("Suara 'Ding' saat lift telah sampai di tujuan.")]
+        [SerializeField] private AudioClip arrivalDingClip;
 
-        // Coroutine progress bar aktif (biar bisa di-stop kalau perlu)
+        private Image[] floorButtonImages;
         private Coroutine activeProgressCoroutine;
 
         private void Awake()
         {
-            // Cache Image dari setiap Button + pasang listener klik
+            // Auto-get AudioSource jika lupa di-drag di Inspector
+            if (audioSource == null)
+            {
+                audioSource = GetComponent<AudioSource>();
+            }
+
             if (floorButtons != null)
             {
                 floorButtonImages = new Image[floorButtons.Length];
@@ -59,7 +70,6 @@ namespace ElevatorSystem
 
                     floorButtonImages[i] = floorButtons[i].GetComponent<Image>();
 
-                    // Capture index untuk dipakai di lambda (hindari closure bug)
                     int floorIndex = i;
                     floorButtons[i].onClick.AddListener(() => OnFloorButtonClicked(floorIndex));
                 }
@@ -68,7 +78,6 @@ namespace ElevatorSystem
 
         private void Start()
         {
-            // Inisialisasi UI di kondisi Idle
             ResetProgressBar();
             SetStatusIdle();
             HighlightCurrentFloorButton();
@@ -76,43 +85,59 @@ namespace ElevatorSystem
 
         private void Update()
         {
-            // Sinkronisasi tampilan saat ElevatorManager dikunci dari luar (mis. mid-move)
-            if (ElevatorManager.Instance != null && currentFloorText != null)
+            if (ElevatorManager.Instance != null)
             {
-                currentFloorText.text = floorLabels[Mathf.Clamp(
-                    ElevatorManager.Instance.currentFloor, 0, floorLabels.Length - 1)];
+                if (currentFloorText != null)
+                {
+                    currentFloorText.text = floorLabels[Mathf.Clamp(
+                        ElevatorManager.Instance.currentFloor, 0, floorLabels.Length - 1)];
+                }
+
+                if (!ElevatorManager.Instance.isMoving && activeProgressCoroutine == null)
+                {
+                    HighlightCurrentFloorButton();
+                }
             }
         }
 
-        /// Dipanggil tiap kali user klik salah satu tombol lantai.
         public void OnFloorButtonClicked(int targetFloorIndex)
         {
-            // Guard: pastikan Singleton ElevatorManager sudah ada di scene
             if (ElevatorManager.Instance == null)
             {
                 Debug.LogError("ElevatorPanelController: ElevatorManager.Instance belum ada di scene!");
                 return;
             }
 
+            // ==================== BARU: PROTEKSI LANTAI TERTINGGI ====================
+            // Karena lantai ada 4 (GF=0, F1=1, F2=2, F3=3), maka lantai tertinggi adalah indeks ke-3 (length - 1)
+            int highestFloorIndex = floorButtons.Length - 1; 
+
+            if (targetFloorIndex == highestFloorIndex)
+            {
+                // Langsung munculkan teks "Access Denied", putar SFX error, dan batalkan proses jalan
+                ShowAccessDenied();
+                return;
+            }
+            // =========================================================================
+
             // Validasi via core logic Orang 1. Return false = ditolak.
             bool accepted = ElevatorManager.Instance.MoveToFloor(targetFloorIndex);
 
             if (!accepted)
             {
-                // Tampilkan Access Denied dan SFX denied (kalau ada)
                 ShowAccessDenied();
                 return;
             }
 
             // Diterima -> jalankan progress bar coroutine
+            PlaySFX(buttonClickClip);
+
             if (activeProgressCoroutine != null) StopCoroutine(activeProgressCoroutine);
             activeProgressCoroutine = StartCoroutine(MoveProgressRoutine(targetFloorIndex));
         }
 
-        /// Coroutine inti: isi fillAmount 0 -> 1 selama moveDuration, lalu teleport.
         private IEnumerator MoveProgressRoutine(int targetFloorIndex)
         {
-            // Setup UI di state Moving
             LockButtonsVisual(true);
             UpdateProgressBar(0f);
             SetStatusMoving(targetFloorIndex);
@@ -129,15 +154,15 @@ namespace ElevatorSystem
 
             UpdateProgressBar(1f);
 
-            // Eksekusi teleport via core logic Orang 1
             ElevatorManager.Instance.TeleportPlayer(targetFloorIndex);
 
-            // Tampilkan status arrived sebentar
             SetStatusArrived(targetFloorIndex);
+
+            // BARU: Mainkan SFX Ding saat status berubah jadi 'Arrived'
+            PlaySFX(arrivalDingClip);
 
             yield return new WaitForSeconds(0.6f);
 
-            // Reset ke kondisi Idle
             ResetProgressBar();
             SetStatusIdle();
             LockButtonsVisual(false);
@@ -146,7 +171,6 @@ namespace ElevatorSystem
             activeProgressCoroutine = null;
         }
 
-        /// Memperbarui nilai fillAmount progress bar (0 - 1).
         public void UpdateProgressBar(float value)
         {
             if (progressBarFill == null) return;
@@ -154,7 +178,6 @@ namespace ElevatorSystem
             progressBarFill.color = colorProgress;
         }
 
-        /// Mereset progress bar ke 0 dan warna Idle.
         private void ResetProgressBar()
         {
             if (progressBarFill == null) return;
@@ -162,7 +185,6 @@ namespace ElevatorSystem
             progressBarFill.color = colorProgress;
         }
 
-        /// Menampilkan status "Access Denied" + warna merah sementara.
         private void ShowAccessDenied()
         {
             if (statusText != null)
@@ -170,20 +192,22 @@ namespace ElevatorSystem
                 statusText.text = "Access Denied";
                 statusText.color = colorDenied;
             }
+
+            // BARU: Mainkan SFX Error saat akses ditolak
+            PlaySFX(accessDeniedClip);
+
             StartCoroutine(ResetDeniedAfterDelay());
         }
 
         private IEnumerator ResetDeniedAfterDelay()
         {
             yield return new WaitForSeconds(deniedMessageDuration);
-            // Hanya reset kalau elevator tidak sedang bergerak
             if (ElevatorManager.Instance != null && !ElevatorManager.Instance.isMoving)
             {
                 SetStatusIdle();
             }
         }
 
-        /// Status default saat elevator standby.
         private void SetStatusIdle()
         {
             if (statusText == null) return;
@@ -191,7 +215,6 @@ namespace ElevatorSystem
             statusText.color = colorTextNormal;
         }
 
-        /// Status saat elevator sedang bergerak menuju lantai tujuan.
         private void SetStatusMoving(int targetIndex)
         {
             if (statusText == null) return;
@@ -201,7 +224,6 @@ namespace ElevatorSystem
             statusText.color = colorTextNormal;
         }
 
-        /// Status saat elevator baru saja tiba di lantai tujuan.
         private void SetStatusArrived(int targetIndex)
         {
             if (statusText == null) return;
@@ -211,7 +233,6 @@ namespace ElevatorSystem
             statusText.color = colorActive;
         }
 
-        /// Nonaktifkan/aktifkan interaksi seluruh tombol lantai (visual + interactable).
         private void LockButtonsVisual(bool locked)
         {
             if (floorButtons == null) return;
@@ -222,7 +243,6 @@ namespace ElevatorSystem
             }
         }
 
-        /// Highlight tombol lantai yang sedang dituju (Electric Blue).
         private void HighlightTargetButton(int targetIndex)
         {
             if (floorButtonImages == null) return;
@@ -233,7 +253,6 @@ namespace ElevatorSystem
             }
         }
 
-        /// Highlight tombol lantai yang sedang ditempati (current floor).
         private void HighlightCurrentFloorButton()
         {
             if (floorButtonImages == null || ElevatorManager.Instance == null) return;
@@ -242,6 +261,15 @@ namespace ElevatorSystem
             {
                 if (floorButtonImages[i] == null) continue;
                 floorButtonImages[i].color = (i == current) ? colorActive : colorNormal;
+            }
+        }
+
+        // BARU: Fungsi helper jembatan untuk memutar audio secara aman
+        private void PlaySFX(AudioClip clip)
+        {
+            if (audioSource != null && clip != null)
+            {
+                audioSource.PlayOneShot(clip);
             }
         }
     }
